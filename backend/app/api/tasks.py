@@ -1163,8 +1163,11 @@ async def _set_task_custom_field_values_for_update(
         definition = definitions_by_key[field_key]
         row = rows_by_definition_id.get(definition.id)
         if value is None:
-            if row is not None:
-                await session.delete(row)
+            # BUG-CUSTOM-FIELD-CLOBBER (47090242): null in PATCH payload = "don't touch".
+            # Stale UI reads send {field: null} for fields set by other actors; silently
+            # deleting those rows erased operator-entered provenance (branch, pr_url,
+            # test_evidence). Treat null as merge-by-omission: preserve existing value.
+            # Explicit field clears must use a dedicated attribution path when added later.
             continue
         if row is None:
             session.add(
